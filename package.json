@@ -24,8 +24,9 @@
   },
   "scripts": {
     "start": "set NODE_OPTIONS=--openssl-legacy-provider && react-scripts start",
-    "backend": "cd server && npx nodemon index.js",
-    "dev": "npx concurrently \"npm start\" \"npm run backend\"",
+    "server": "node server/index.js",
+    "backend": "nodemon server/index.js",
+    "dev": "concurrently \"npm start\" \"npm run backend\"",
     "build": "react-scripts build",
     "test": "react-scripts test",
     "eject": "react-scripts eject"
