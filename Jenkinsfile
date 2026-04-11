@@ -3,7 +3,7 @@ pipeline {
 
     environment {
         // Updated with your Docker Hub username
-        DOCKER_IMAGE = "prudhviraj310/ecommerce-app:${env.BUILD_NUMBER}"
+        DOCKER_IMAGE = "prudhviraj7675/ecommerce-app:${env.BUILD_NUMBER}"
     }
 
     stages {
@@ -51,7 +51,7 @@ pipeline {
                          Build Number: ${env.BUILD_NUMBER}
                          Status: ${currentBuild.currentResult}
                          Check Console: ${env.BUILD_URL}""",
-                to: 'prudhviraj310@gmail.com'
+                to: 'prudhviraj7675@gmail.com'
             )
         }
     }
