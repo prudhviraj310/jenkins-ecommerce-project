@@ -32,11 +32,12 @@ pipeline {
         stage('Build Docker Images') {
             steps {
                 script {
-                    // Build Frontend - Uses your custom filename and sets the API URL
-                    sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -t ${FRONTEND_IMAGE}:latest -f dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
+                    // FIXED: Changed to Capital 'D' to match your actual filenames
+                    // Build Frontend
+                    sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     
-                    // Build Backend - Uses your custom backend filename
-                    sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -t ${BACKEND_IMAGE}:latest -f dockerfile.backend ."
+                    // Build Backend
+                    sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                 }
             }
         }
@@ -48,11 +49,11 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
                         
-                        // Push Frontend (Build Number tag and Latest tag)
+                        // Push Frontend
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${FRONTEND_IMAGE}:latest"
                         
-                        // Push Backend (Build Number tag and Latest tag)
+                        // Push Backend
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${BACKEND_IMAGE}:latest"
                     }
@@ -63,8 +64,7 @@ pipeline {
         stage('Deploy to AWS') {
             steps {
                 script {
-                    // This tells the host machine to pull the new images and restart the containers
-                    // It uses the docker-compose.yml file you created in the home directory
+                    // Pulls new images and restarts containers using your docker-compose.yml
                     sh "docker compose pull"
                     sh "docker compose up -d"
                 }
