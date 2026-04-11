@@ -1,0 +1,47 @@
+# --- Dependencies ---
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+package-lock.json
+
+# --- Terraform (CRITICAL: Ignores the heavy 800MB+ binaries) ---
+.terraform/
+*.tfstate
+*.tfstate.backup
+*.tfvars
+*.tfvars.json
+.terraform.lock.hcl
+
+# --- Production & Build ---
+build/
+dist/
+out/
+.next/
+
+# --- Environment & Secrets ---
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+*.pem
+*.key
+
+# --- Logs ---
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+*.log
+
+# --- Operating System Files ---
+.DS_Store
+Thumbs.db
+*.exe
+*.dll
+*.so
+
+# --- IDEs ---
+.vscode/
+.idea/
+*.swp
