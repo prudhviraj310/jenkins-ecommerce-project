@@ -6,15 +6,16 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        API_URL             = "http://13.201.34.71:5000/api"
+        // Your current AWS Public IP
+        API_URL             = "http://35.154.134.186:5000/api" 
     }
 
     stages {
         stage('Pre-Flight Cleanup') {
             steps {
-                echo "Cleaning up environment to prevent 'No Space Left on Device'..."
-                // Removes dangling images, stopped containers, and unused networks
-                sh "docker system prune -f"
+                echo "Cleaning up environment..."
+                // Added || true so it doesn't fail if there's nothing to prune
+                sh "docker system prune -f || true"
             }
         }
 
@@ -26,15 +27,13 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
-                // Ensure Trivy doesn't fail the build if it can't find a DB, but reports vulnerabilities
                 sh 'trivy fs . --severity HIGH,CRITICAL --exit-code 0'
             }
         }
 
-        stage('Parallel Image Build') {
+        stage('Image Build') {
             steps {
                 script {
-                    // We build these sequentially to avoid CPU spikes on small instances
                     echo "Building Frontend Image..."
                     sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     
@@ -63,11 +62,20 @@ pipeline {
         stage('Zero-Downtime Deploy') {
             steps {
                 script {
-                    echo "Deploying to AWS via Docker Compose..."
-                    // 'pull' ensures we get the exact images we just pushed
-                    sh "docker compose pull"
-                    // 'up -d' recreates only the containers that changed
-                    sh "docker compose up -d"
+                    echo "Deploying via Docker CLI (Bypassing Compose Issues)..."
+                    // 1. Pull the latest images we just pushed
+                    sh "docker pull ${FRONTEND_IMAGE}:latest"
+                    sh "docker pull ${BACKEND_IMAGE}:latest"
+
+                    // 2. Stop and Remove old containers if they exist
+                    sh "docker stop ecommerce-frontend ecommerce-backend || true"
+                    sh "docker rm ecommerce-frontend ecommerce-backend || true"
+
+                    // 3. Start New Containers
+                    // Backend first
+                    sh "docker run -d --name ecommerce-backend -p 5000:5000 ${BACKEND_IMAGE}:latest"
+                    // Frontend second
+                    sh "docker run -d --name ecommerce-frontend -p 3000:80 ${FRONTEND_IMAGE}:latest"
                 }
             }
         }
@@ -76,16 +84,16 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
-            // Remove the specific tagged images we just built to save disk space
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
-            // Final wipe of the workspace
             cleanWs()
         }
         success {
-            echo "✅ DEPLOYMENT SUCCESSFUL: http://13.201.34.71:3000"
+            echo "✅ DEPLOYMENT SUCCESSFUL"
+            echo "Frontend: http://35.154.134.186:3000"
+            echo "Backend: http://35.154.134.186:5000"
         }
         failure {
-            echo "❌ DEPLOYMENT FAILED: Review the 'Registry Push' or 'Deploy' stages in the log."
+            echo "❌ DEPLOYMENT FAILED: Check logs for Permission or Command errors."
         }
     }
 }
