@@ -2,11 +2,11 @@ pipeline {
     agent any
 
     environment {
-        // Defining variables for easier updates
-        DOCKER_IMAGE = "prudhviraj7675/ecommerce-app"
+        // FIXED: Using your correct Docker Hub username here
+        DOCKER_IMAGE = "prudhviraj310/ecommerce-app"
         DOCKER_TAG = "${BUILD_NUMBER}"
         
-        // Use underscores here. This variable holds the "String" ID from your UI.
+        // This variable holds the ID 'docker-hub-creds' which you have in Jenkins UI
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds' 
     }
 
@@ -35,7 +35,7 @@ pipeline {
         stage('Push to Docker Hub') {
             steps {
                 script {
-                    // We call the variable DOCKER_HUB_CREDS_ID which contains the string 'docker-hub-creds'
+                    // This pulls the username and token from your 'docker-hub-creds'
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
                         sh "docker push ${DOCKER_IMAGE}:${DOCKER_TAG}"
@@ -48,16 +48,16 @@ pipeline {
 
     post {
         always {
-            // Cleanup space to keep your 20GB disk healthy
+            // Housekeeping for your 20GB disk
             sh "docker rmi ${DOCKER_IMAGE}:${DOCKER_TAG} || true"
             sh "docker system prune -f"
             cleanWs()
         }
         success {
-            echo "Pipeline Successful! Image pushed to Docker Hub."
+            echo "SUCCESS: Image pushed to https://hub.docker.com/u/prudhviraj310"
         }
         failure {
-            echo "Pipeline Failed. Check logs for Credential or Network errors."
+            echo "FAILURE: Check if the token has 'Read, Write, Delete' permissions."
         }
     }
 }
