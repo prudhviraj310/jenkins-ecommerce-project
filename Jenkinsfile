@@ -6,15 +6,21 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        // Your current AWS Public IP
+        // Hardcoded to your Jenkins/App Server IP for consistency
         API_URL             = "http://35.154.134.186:5000/api" 
     }
 
     stages {
+        stage('Environment Audit') {
+            steps {
+                // This checks permissions so we can see them in the logs
+                sh "whoami && ls -l /var/run/docker.sock || true"
+            }
+        }
+
         stage('Pre-Flight Cleanup') {
             steps {
-                echo "Cleaning up environment..."
-                // Added || true so it doesn't fail if there's nothing to prune
+                echo "Cleaning up local images to save space..."
                 sh "docker system prune -f || true"
             }
         }
@@ -27,6 +33,7 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
+                // Scans the files, but exit-code 0 ensures we don't stop the build
                 sh 'trivy fs . --severity HIGH,CRITICAL --exit-code 0'
             }
         }
@@ -34,10 +41,10 @@ pipeline {
         stage('Image Build') {
             steps {
                 script {
-                    echo "Building Frontend Image..."
+                    echo "Building Frontend..."
                     sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     
-                    echo "Building Backend Image..."
+                    echo "Building Backend..."
                     sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                 }
             }
@@ -49,7 +56,6 @@ pipeline {
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
                         
-                        echo "Pushing images to Docker Hub..."
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${FRONTEND_IMAGE}:latest"
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
@@ -59,19 +65,20 @@ pipeline {
             }
         }
 
-        stage('Zero-Downtime Deploy') {
+        stage('Production Deployment') {
             steps {
                 script {
-                    echo "Deploying via Docker CLI (Bypassing Compose Issues)..."
-                    // 1. Pull the latest images we just pushed
+                    echo "Deploying via Docker CLI (Standard Method)..."
+                    
+                    // 1. Pull latest images
                     sh "docker pull ${FRONTEND_IMAGE}:latest"
                     sh "docker pull ${BACKEND_IMAGE}:latest"
 
-                    // 2. Stop and Remove old containers if they exist
+                    // 2. Stop and Remove old containers (don't fail if they don't exist)
                     sh "docker stop ecommerce-frontend ecommerce-backend || true"
                     sh "docker rm ecommerce-frontend ecommerce-backend || true"
 
-                    // 3. Start New Containers
+                    // 3. Start New Containers on the App Ports
                     // Backend first
                     sh "docker run -d --name ecommerce-backend -p 5000:5000 ${BACKEND_IMAGE}:latest"
                     // Frontend second
@@ -84,16 +91,17 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
+            // Save disk space by removing the specific build tag
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             cleanWs()
         }
         success {
             echo "✅ DEPLOYMENT SUCCESSFUL"
-            echo "Frontend: http://35.154.134.186:3000"
-            echo "Backend: http://35.154.134.186:5000"
+            echo "Frontend URL: http://35.154.134.186:3000"
+            echo "Backend URL: http://35.154.134.186:5000"
         }
         failure {
-            echo "❌ DEPLOYMENT FAILED: Check logs for Permission or Command errors."
+            echo "❌ DEPLOYMENT FAILED. Check console output for permission errors."
         }
     }
 }
