@@ -1,20 +1,15 @@
-# Use Node.js as the base image
-FROM node:18-alpine
-
-# Set the working directory inside the container
+# Stage 1: Build the app
+FROM node:18-alpine AS build
 WORKDIR /app
-
-# Copy package files first to speed up build (caching)
 COPY package*.json ./
-
-# Install dependencies
 RUN npm install
-
-# Copy the rest of the code (src, server, public, etc.)
 COPY . .
+RUN npm run build
 
-# Expose the port your app runs on (usually 3000 or 5000)
-EXPOSE 3000
-
-# Start the application
-CMD ["npm", "start"]
+# Stage 2: Serve the app using Nginx (The Pro Choice)
+FROM nginx:stable-alpine
+# Copy the build files from Stage 1 to Nginx's html folder
+COPY --from=build /app/build /usr/share/nginx/html
+# Copy a custom nginx config if needed, or just use default
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
