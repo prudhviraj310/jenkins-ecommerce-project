@@ -10,10 +10,13 @@ const App = () => {
   const [order, setOrder] = useState({});
   const [errorMessage, setErrorMessage] = useState('');
 
-  // 1. FETCH PRODUCTS
+  // --- DYNAMIC API URL ---
+  // This picks up the IP from Docker during build. Defaults to localhost for local dev.
+  const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
+
   const fetchProducts = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/products');
+      const response = await fetch(`${API_BASE_URL}/products`);
       const data = await response.json();
       const formatted = data.map((item) => ({
         id: item.id.toString(),
@@ -23,13 +26,12 @@ const App = () => {
         image: { source: item.image_url, url: item.image_url }
       }));
       setProducts(formatted);
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Fetch Products Error:", err); }
   };
 
-  // 2. FETCH CART FROM DATABASE (Crucial for the Cart Page)
   const fetchCart = async () => {
     try {
-      const response = await fetch('http://localhost:5000/api/cart');
+      const response = await fetch(`${API_BASE_URL}/cart`);
       const data = await response.json();
       
       const formattedItems = data.map(item => ({
@@ -47,19 +49,18 @@ const App = () => {
         total_items: data.length,
         subtotal: { formatted_with_symbol: `₹${totalValue}` }
       });
-    } catch (err) { console.error(err); }
+    } catch (err) { console.error("Fetch Cart Error:", err); }
   };
 
-  // 3. HANDLE ADD TO CART
   const handleAddToCart = async (productId, quantity) => {
     try {
-      await fetch('http://localhost:5000/api/cart', {
+      await fetch(`${API_BASE_URL}/cart`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ productId, quantity: 1 })
       });
-      fetchCart(); // Refresh cart data immediately
-    } catch (err) { console.error(err); }
+      fetchCart(); 
+    } catch (err) { console.error("Add to Cart Error:", err); }
   };
 
   useEffect(() => {
@@ -79,7 +80,6 @@ const App = () => {
             <Products products={products} onAddToCart={handleAddToCart} />
           </Route>
           <Route exact path="/cart">
-            {/* THIS LINE CONNECTS YOUR DB DATA TO THE CART PAGE */}
             <Cart 
               cart={cart} 
               onUpdateCartQty={() => {}} 

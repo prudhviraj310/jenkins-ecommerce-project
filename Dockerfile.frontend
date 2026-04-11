@@ -1,0 +1,33 @@
+# Stage 1: Build the app
+FROM node:18-alpine AS build
+WORKDIR /app
+
+# --- ENVIRONMENT VARIABLE SETUP ---
+# These ARGs allow Docker Compose to pass your API URL and Stripe Key 
+# into the build process so React can use them.
+ARG REACT_APP_STRIPE_PUBLIC_KEY
+ARG REACT_APP_API_URL
+
+ENV REACT_APP_STRIPE_PUBLIC_KEY=$REACT_APP_STRIPE_PUBLIC_KEY
+ENV REACT_APP_API_URL=$REACT_APP_API_URL
+# ----------------------------------
+
+COPY package*.json ./
+
+# SET THE LEGACY OPENSSL OPTION
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
+RUN npm install
+COPY . .
+RUN npm run build
+
+# Stage 2: Serve the app using Nginx
+FROM nginx:stable-alpine
+
+# Copy the build output from Stage 1 to Nginx's serving directory
+COPY --from=build /app/build /usr/share/nginx/html
+
+# Expose Port 80 for Nginx
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]

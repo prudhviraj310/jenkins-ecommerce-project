@@ -1,8 +1,29 @@
 version: '3.8'
+
 services:
-  ecommerce-web:
-    build: .
+  # --- BACKEND SERVICE ---
+  backend-api:
+    build:
+      context: .
+      dockerfile: Dockerfile.backend
     ports:
-      - "3000:3000"
+      - "5000:5000"
     environment:
       - NODE_ENV=production
+      - STRIPE_SECRET_KEY=sk_test_your_secret_key_here
+    restart: always
+
+  # --- FRONTEND SERVICE ---
+  frontend-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # This tells the React app to talk to your AWS server
+        - REACT_APP_API_URL=http://13.201.34.71:5000/api
+        - REACT_APP_STRIPE_PUBLIC_KEY=pk_test_your_public_key_here
+    ports:
+      - "3000:80"
+    depends_on:
+      - backend-api
+    restart: always
