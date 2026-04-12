@@ -1,33 +1,25 @@
-# Stage 1: Build the app
+# --- Build Stage ---
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# --- ENVIRONMENT VARIABLE SETUP ---
-# These ARGs allow Docker Compose to pass your API URL and Stripe Key 
-# into the build process so React can use them.
-ARG REACT_APP_STRIPE_PUBLIC_KEY
+# Define the argument that Jenkins passes
 ARG REACT_APP_API_URL
-
-ENV REACT_APP_STRIPE_PUBLIC_KEY=$REACT_APP_STRIPE_PUBLIC_KEY
+# Set it as an environment variable so React can see it during 'npm run build'
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
-# ----------------------------------
 
-COPY package*.json ./
-
-# SET THE LEGACY OPENSSL OPTION
-ENV NODE_OPTIONS=--openssl-legacy-provider
-
+# Copy package files from the subfolder
+COPY frontend/package*.json ./
 RUN npm install
-COPY . .
+
+# Copy the rest of the frontend source code
+COPY frontend/ .
+
+# Build the static files
 RUN npm run build
 
-# Stage 2: Serve the app using Nginx
-FROM nginx:stable-alpine
-
-# Copy the build output from Stage 1 to Nginx's serving directory
+# --- Production Stage ---
+FROM nginx:alpine
+# Copy the build output to Nginx
 COPY --from=build /app/build /usr/share/nginx/html
-
-# Expose Port 80 for Nginx
 EXPOSE 80
-
 CMD ["nginx", "-g", "daemon off;"]

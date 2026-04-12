@@ -6,21 +6,19 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        // Hardcoded to your Jenkins/App Server IP for consistency
         API_URL             = "http://35.154.134.186:5000/api" 
     }
 
     stages {
         stage('Environment Audit') {
             steps {
-                // This checks permissions so we can see them in the logs
                 sh "whoami && ls -l /var/run/docker.sock || true"
             }
         }
 
         stage('Pre-Flight Cleanup') {
             steps {
-                echo "Cleaning up local images to save space..."
+                echo "Cleaning up local images..."
                 sh "docker system prune -f || true"
             }
         }
@@ -33,8 +31,8 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
-                // Scans the files, but exit-code 0 ensures we don't stop the build
-                sh 'trivy fs . --severity HIGH,CRITICAL --exit-code 0'
+                // Scan the folders where the actual code lives
+                sh 'trivy fs server/ frontend/ --severity HIGH,CRITICAL --exit-code 0'
             }
         }
 
@@ -55,7 +53,6 @@ pipeline {
                 script {
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
-                        
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${FRONTEND_IMAGE}:latest"
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
@@ -68,20 +65,14 @@ pipeline {
         stage('Production Deployment') {
             steps {
                 script {
-                    echo "Deploying via Docker CLI (Standard Method)..."
-                    
-                    // 1. Pull latest images
+                    echo "Deploying containers..."
                     sh "docker pull ${FRONTEND_IMAGE}:latest"
                     sh "docker pull ${BACKEND_IMAGE}:latest"
-
-                    // 2. Stop and Remove old containers (don't fail if they don't exist)
                     sh "docker stop ecommerce-frontend ecommerce-backend || true"
                     sh "docker rm ecommerce-frontend ecommerce-backend || true"
-
-                    // 3. Start New Containers on the App Ports
-                    // Backend first
+                    
+                    // Deploying with bridge network or link so backend can be found if needed
                     sh "docker run -d --name ecommerce-backend -p 5000:5000 ${BACKEND_IMAGE}:latest"
-                    // Frontend second
                     sh "docker run -d --name ecommerce-frontend -p 3000:80 ${FRONTEND_IMAGE}:latest"
                 }
             }
@@ -90,18 +81,11 @@ pipeline {
 
     post {
         always {
-            echo "Post-build maintenance..."
-            // Save disk space by removing the specific build tag
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             cleanWs()
         }
         success {
             echo "✅ DEPLOYMENT SUCCESSFUL"
-            echo "Frontend URL: http://35.154.134.186:3000"
-            echo "Backend URL: http://35.154.134.186:5000"
-        }
-        failure {
-            echo "❌ DEPLOYMENT FAILED. Check console output for permission errors."
         }
     }
 }
