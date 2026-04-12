@@ -6,7 +6,6 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        // This is injected into the Docker Compose build process
         API_URL             = "http://35.154.134.186:5000/api" 
     }
 
@@ -32,10 +31,7 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
-                echo "Scanning Backend Files..."
                 sh 'trivy fs server/ --severity HIGH,CRITICAL --exit-code 0'
-                
-                echo "Scanning Frontend Files..."
                 sh 'trivy fs frontend/ --severity HIGH,CRITICAL --exit-code 0'
             }
         }
@@ -56,7 +52,7 @@ pipeline {
             steps {
                 script {
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "echo ${PASS} | docker login -u ${USER} --password-stdin"
+                        sh "echo '${PASS}' | docker login -u ${USER} --password-stdin"
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${FRONTEND_IMAGE}:latest"
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
@@ -70,11 +66,12 @@ pipeline {
             steps {
                 script {
                     echo "Deploying via Docker Compose..."
-                    // This brings everything up (DB + Backend + Frontend) in one command
-                    // The --build ensures it uses the images we just created
+                    // Force pull latest to avoid using stale local cache
+                    sh "API_URL=${API_URL} docker-compose pull"
+                    // Down then Up to ensure a clean state
+                    sh "API_URL=${API_URL} docker-compose down || true"
                     sh "API_URL=${API_URL} docker-compose up -d"
                     
-                    echo "Verifying containers..."
                     sh "docker ps"
                 }
             }
@@ -84,7 +81,7 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
-            // We keep 'latest' but remove the specific build number tag to save disk space
+            // Aggressive cleanup: removes the build-specific images to keep the server clean
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             cleanWs()
         }
@@ -92,7 +89,7 @@ pipeline {
             echo "✅ DEPLOYMENT SUCCESSFUL"
         }
         failure {
-            echo "❌ DEPLOYMENT FAILED"
+            echo "❌ DEPLOYMENT FAILED - Check the Registry Push or Docker Compose steps above"
         }
     }
 }
