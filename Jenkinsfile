@@ -6,6 +6,7 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
+        // Ensure this matches your AWS Public IP
         API_URL             = "http://35.154.134.186:5000/api" 
     }
 
@@ -18,7 +19,7 @@ pipeline {
 
         stage('Pre-Flight Cleanup') {
             steps {
-                echo "Cleaning up local images..."
+                echo "Cleaning up local images to save space..."
                 sh "docker system prune -f || true"
             }
         }
@@ -31,8 +32,12 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
-                // Scan the folders where the actual code lives
-                sh 'trivy fs server/ frontend/ --severity HIGH,CRITICAL --exit-code 0'
+                // Fixed: Running scans separately to avoid "multiple targets" error
+                echo "Scanning Backend Files..."
+                sh 'trivy fs server/ --severity HIGH,CRITICAL --exit-code 0'
+                
+                echo "Scanning Frontend Files..."
+                sh 'trivy fs frontend/ --severity HIGH,CRITICAL --exit-code 0'
             }
         }
 
@@ -65,14 +70,16 @@ pipeline {
         stage('Production Deployment') {
             steps {
                 script {
-                    echo "Deploying containers..."
+                    echo "Deploying via Docker CLI..."
                     sh "docker pull ${FRONTEND_IMAGE}:latest"
                     sh "docker pull ${BACKEND_IMAGE}:latest"
+
                     sh "docker stop ecommerce-frontend ecommerce-backend || true"
                     sh "docker rm ecommerce-frontend ecommerce-backend || true"
-                    
-                    // Deploying with bridge network or link so backend can be found if needed
+
+                    // Backend run
                     sh "docker run -d --name ecommerce-backend -p 5000:5000 ${BACKEND_IMAGE}:latest"
+                    // Frontend run
                     sh "docker run -d --name ecommerce-frontend -p 3000:80 ${FRONTEND_IMAGE}:latest"
                 }
             }
@@ -81,6 +88,7 @@ pipeline {
 
     post {
         always {
+            echo "Post-build maintenance..."
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             cleanWs()
         }
