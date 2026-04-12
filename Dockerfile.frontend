@@ -4,6 +4,10 @@ WORKDIR /app
 ARG REACT_APP_API_URL
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 
+# --- CRITICAL FIX FOR ERR_OSSL_EVP_UNSUPPORTED ---
+# This allows the legacy Webpack build to run on Node 18+
+ENV NODE_OPTIONS=--openssl-legacy-provider
+
 # Copy from the new folder structure
 COPY frontend/package*.json ./
 RUN npm install
