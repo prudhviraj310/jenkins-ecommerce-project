@@ -6,7 +6,7 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        // Ensure this matches your AWS Public IP
+        // This is injected into the Docker Compose build process
         API_URL             = "http://35.154.134.186:5000/api" 
     }
 
@@ -32,7 +32,6 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
-                // Fixed: Running scans separately to avoid "multiple targets" error
                 echo "Scanning Backend Files..."
                 sh 'trivy fs server/ --severity HIGH,CRITICAL --exit-code 0'
                 
@@ -70,17 +69,13 @@ pipeline {
         stage('Production Deployment') {
             steps {
                 script {
-                    echo "Deploying via Docker CLI..."
-                    sh "docker pull ${FRONTEND_IMAGE}:latest"
-                    sh "docker pull ${BACKEND_IMAGE}:latest"
-
-                    sh "docker stop ecommerce-frontend ecommerce-backend || true"
-                    sh "docker rm ecommerce-frontend ecommerce-backend || true"
-
-                    // Backend run
-                    sh "docker run -d --name ecommerce-backend -p 5000:5000 ${BACKEND_IMAGE}:latest"
-                    // Frontend run
-                    sh "docker run -d --name ecommerce-frontend -p 3000:80 ${FRONTEND_IMAGE}:latest"
+                    echo "Deploying via Docker Compose..."
+                    // This brings everything up (DB + Backend + Frontend) in one command
+                    // The --build ensures it uses the images we just created
+                    sh "API_URL=${API_URL} docker-compose up -d"
+                    
+                    echo "Verifying containers..."
+                    sh "docker ps"
                 }
             }
         }
@@ -89,11 +84,15 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
+            // We keep 'latest' but remove the specific build number tag to save disk space
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             cleanWs()
         }
         success {
             echo "✅ DEPLOYMENT SUCCESSFUL"
+        }
+        failure {
+            echo "❌ DEPLOYMENT FAILED"
         }
     }
 }
