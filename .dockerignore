@@ -1,0 +1,12 @@
+﻿node_modules
+.terraform
+terraform
+*.tfstate*
+.git
+.vscode
+public
+src
+.env*
+*.pem
+*.key
+*.log
