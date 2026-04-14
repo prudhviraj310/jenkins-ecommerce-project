@@ -2,6 +2,7 @@ pipeline {
     agent any
     
     options {
+        // Keeps the workspace clean and prevents Git identity/corruption errors
         skipDefaultCheckout(true) 
     }
 
@@ -36,8 +37,8 @@ pipeline {
                     }
                     
                     echo "Deploying to Production..."
-                    // USING THE ABSOLUTE PATH FOR DOCKER-COMPOSE
-                    sh "API_URL=${API_URL} /usr/bin/docker-compose up -d --force-recreate"
+                    // CHANGED: Using '/usr/bin/docker compose' (plugin) instead of standalone file
+                    sh "API_URL=${API_URL} /usr/bin/docker compose up -d --force-recreate"
                     
                     echo "Cleaning up local build images..."
                     sh "/usr/bin/docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
