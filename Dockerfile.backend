@@ -1,19 +1,16 @@
 FROM node:18-alpine
 
-# Set the working directory inside the container
+# Create app directory
 WORKDIR /app
 
-# Copy package files from the 'server' subfolder
+# Copy package files from the server directory
 COPY server/package*.json ./
 
-# Install only production dependencies (keeps the image small)
-RUN npm install --production
+# Install dependencies
+RUN npm install
 
-# Copy the actual backend code from the 'server' subfolder
+# Copy the rest of the server code
 COPY server/ .
 
-# Expose the port your Express app runs on
-EXPOSE 5000
-
-# Start the application
-CMD ["node", "server.js"]
+# IMPORTANT: Your file is named index.js, not server.js
+CMD ["node", "index.js"]
