@@ -7,35 +7,41 @@ pipeline {
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
         API_URL             = "http://35.154.134.186:5000/api" 
-        // CHANGE THIS TO YOUR EMAIL
         NOTIFY_EMAIL        = "prudhviraj7675@gmail.com" 
     }
 
     stages {
+        stage('Workspace Reset') {
+            steps {
+                echo "Wiping workspace to fix Git corruption..."
+                // This deletes everything in the folder BEFORE we try to clone
+                deleteDir() 
+            }
+        }
+
         stage('Environment Audit') {
             steps {
                 sh "whoami && docker --version && docker compose version || true"
             }
         }
 
-        stage('Pre-Flight Cleanup') {
+        stage('Source Checkout') {
             steps {
-                echo "Cleaning up to prevent Jenkins freezing..."
-                sh "docker system prune -af --volumes || true"
+                // Now that the folder is empty, checkout will perform a fresh clone
+                checkout scm
             }
         }
 
-        stage('Source Checkout') {
+        stage('Pre-Flight Cleanup') {
             steps {
-                checkout scm
+                echo "Cleaning up Docker to prevent storage issues..."
+                sh "docker system prune -af --volumes || true"
             }
         }
 
         stage('Security Gate (Trivy)') {
             steps {
-                // Using --severity HIGH,CRITICAL but exit-code 0 so it doesn't stop the build if bugs are found
-                sh 'trivy fs server/ --severity HIGH,CRITICAL --exit-code 0'
-                sh 'trivy fs frontend/ --severity HIGH,CRITICAL --exit-code 0'
+                sh 'trivy fs . --severity HIGH,CRITICAL --exit-code 0'
             }
         }
 
@@ -69,10 +75,9 @@ pipeline {
             steps {
                 script {
                     echo "Deploying via Docker Compose..."
-                    // CRITICAL FIX: Changed docker-compose (old) to docker compose (new)
+                    // Using modern 'docker compose' V2 syntax
                     sh "API_URL=${API_URL} docker compose pull"
                     sh "API_URL=${API_URL} docker compose up -d --force-recreate"
-                    
                     sh "docker ps"
                 }
             }
@@ -82,9 +87,9 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
+            // Remove local build-specific images to save space
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
             
-            // FIX: This sends the actual email
             emailext (
                 to: "${env.NOTIFY_EMAIL}",
                 subject: "Build ${currentBuild.fullDisplayName} - Status: ${currentBuild.result}",
