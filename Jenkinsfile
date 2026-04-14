@@ -7,19 +7,21 @@ pipeline {
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
         API_URL             = "http://35.154.134.186:5000/api" 
+        // CHANGE THIS TO YOUR EMAIL
+        NOTIFY_EMAIL        = "prudhviraj7675@gmail.com" 
     }
 
     stages {
         stage('Environment Audit') {
             steps {
-                sh "whoami && ls -l /var/run/docker.sock || true"
+                sh "whoami && docker --version && docker compose version || true"
             }
         }
 
         stage('Pre-Flight Cleanup') {
             steps {
-                echo "Cleaning up local images to save space..."
-                sh "docker system prune -f || true"
+                echo "Cleaning up to prevent Jenkins freezing..."
+                sh "docker system prune -af --volumes || true"
             }
         }
 
@@ -31,6 +33,7 @@ pipeline {
 
         stage('Security Gate (Trivy)') {
             steps {
+                // Using --severity HIGH,CRITICAL but exit-code 0 so it doesn't stop the build if bugs are found
                 sh 'trivy fs server/ --severity HIGH,CRITICAL --exit-code 0'
                 sh 'trivy fs frontend/ --severity HIGH,CRITICAL --exit-code 0'
             }
@@ -66,11 +69,9 @@ pipeline {
             steps {
                 script {
                     echo "Deploying via Docker Compose..."
-                    // Force pull latest to avoid using stale local cache
-                    sh "API_URL=${API_URL} docker-compose pull"
-                    // Down then Up to ensure a clean state
-                    sh "API_URL=${API_URL} docker-compose down || true"
-                    sh "API_URL=${API_URL} docker-compose up -d"
+                    // CRITICAL FIX: Changed docker-compose (old) to docker compose (new)
+                    sh "API_URL=${API_URL} docker compose pull"
+                    sh "API_URL=${API_URL} docker compose up -d --force-recreate"
                     
                     sh "docker ps"
                 }
@@ -81,15 +82,25 @@ pipeline {
     post {
         always {
             echo "Post-build maintenance..."
-            // Aggressive cleanup: removes the build-specific images to keep the server clean
             sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
+            
+            // FIX: This sends the actual email
+            emailext (
+                to: "${env.NOTIFY_EMAIL}",
+                subject: "Build ${currentBuild.fullDisplayName} - Status: ${currentBuild.result}",
+                body: """Build Status: ${currentBuild.result}
+                        Project: ${env.JOB_NAME}
+                        Build Number: ${env.BUILD_NUMBER}
+                        Check logs here: ${env.BUILD_URL}""",
+                attachLog: true
+            )
             cleanWs()
         }
         success {
             echo "✅ DEPLOYMENT SUCCESSFUL"
         }
         failure {
-            echo "❌ DEPLOYMENT FAILED - Check the Registry Push or Docker Compose steps above"
+            echo "❌ DEPLOYMENT FAILED"
         }
     }
 }
