@@ -17,7 +17,6 @@ pipeline {
     stages {
         stage('Hard Reset Workspace') {
             steps {
-                echo "Nuking workspace to fix status 128..."
                 deleteDir() 
                 checkout scm 
             }
@@ -27,7 +26,6 @@ pipeline {
             steps {
                 script {
                     echo "Building and Pushing Images..."
-                    // We keep /usr/bin/docker for builds as it worked perfectly
                     sh "/usr/bin/docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     sh "/usr/bin/docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.backend ."
                     
@@ -38,8 +36,8 @@ pipeline {
                     }
                     
                     echo "Deploying to Production..."
-                    // SWITCHED TO docker-compose for better compatibility with your environment
-                    sh "API_URL=${API_URL} docker-compose up -d --force-recreate"
+                    // USING THE ABSOLUTE PATH FOR DOCKER-COMPOSE
+                    sh "API_URL=${API_URL} /usr/bin/docker-compose up -d --force-recreate"
                     
                     echo "Cleaning up local build images..."
                     sh "/usr/bin/docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
