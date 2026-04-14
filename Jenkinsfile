@@ -1,8 +1,8 @@
 pipeline {
     agent any
     
-    // This forced option does the same thing as unchecking "Lightweight Checkout"
     options {
+        // Skips the lightweight checkout which was causing the Git 128 error
         skipDefaultCheckout(true) 
     }
 
@@ -19,9 +19,8 @@ pipeline {
         stage('Hard Reset Workspace') {
             steps {
                 echo "Nuking workspace to fix status 128..."
-                deleteDir() // This clears the "haunted" folder
-                
-                // Now we manually trigger the checkout since we skipped the default one
+                deleteDir() 
+                // Manually trigger checkout now that workspace is guaranteed clean
                 checkout scm 
             }
         }
@@ -30,20 +29,25 @@ pipeline {
             steps {
                 script {
                     echo "Environment Audit..."
-                    sh "docker --version && docker compose version"
+                    // Using full path to ensure Docker is found
+                    sh "/usr/bin/docker --version"
                     
                     echo "Building Images..."
-                    sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
-                    sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.backend ."
+                    sh "/usr/bin/docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
+                    sh "/usr/bin/docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.backend ."
                     
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
-                        sh "echo '${PASS}' | docker login -u ${USER} --password-stdin"
-                        sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
-                        sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
+                        sh "echo '${PASS}' | /usr/bin/docker login -u ${USER} --password-stdin"
+                        sh "/usr/bin/docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
+                        sh "/usr/bin/docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
                     }
                     
                     echo "Deploying..."
-                    sh "API_URL=${API_URL} docker compose up -d --force-recreate"
+                    // 'docker compose' (with space) is the modern standard for the plugin
+                    sh "API_URL=${API_URL} /usr/bin/docker compose up -d --force-recreate"
+                    
+                    echo "Cleaning up local build images..."
+                    sh "/usr/bin/docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
                 }
             }
         }
@@ -54,7 +58,7 @@ pipeline {
             emailext (
                 to: "${env.NOTIFY_EMAIL}",
                 subject: "Build ${currentBuild.fullDisplayName} - ${currentBuild.result}",
-                body: "Check logs: ${env.BUILD_URL}",
+                body: "Project: ${env.JOB_NAME}\nBuild: ${env.BUILD_NUMBER}\nStatus: ${currentBuild.result}\nLogs: ${env.BUILD_URL}",
                 attachLog: true
             )
             cleanWs()
