@@ -1,7 +1,6 @@
 version: '3.8'
 
 services:
-  # --- DATABASE SERVICE ---
   db:
     image: mysql:8.0
     container_name: mysql-db
@@ -16,11 +15,9 @@ services:
     networks:
       - ecommerce-network
 
-  # --- BACKEND SERVICE ---
   backend-api:
-    build:
-      context: .
-      dockerfile: Dockerfile.backend
+    # USE THE IMAGE JENKINS PUSHED
+    image: prudhviraj310/ecommerce-backend:latest
     container_name: ecommerce-backend
     ports:
       - "5000:5000"
@@ -36,14 +33,9 @@ services:
     networks:
       - ecommerce-network
 
-  # --- FRONTEND SERVICE ---
   frontend-app:
-    build:
-      context: .
-      dockerfile: Dockerfile.frontend
-      args:
-        # Matches the API_URL variable in your Jenkinsfile
-        - REACT_APP_API_URL=http://35.154.134.186:5000/api
+    # USE THE IMAGE JENKINS PUSHED
+    image: prudhviraj310/ecommerce-frontend:latest
     container_name: ecommerce-frontend
     ports:
       - "3000:80"
