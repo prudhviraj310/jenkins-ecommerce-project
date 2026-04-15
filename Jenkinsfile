@@ -3,6 +3,8 @@ pipeline {
     
     options {
         skipDefaultCheckout(true) 
+        timeout(time: 1, unit: 'HOURS') // Good practice to prevent hanging builds
+        ansiColor('xterm')
     }
 
     environment {
@@ -15,14 +17,14 @@ pipeline {
     }
 
     stages {
-        stage('Hard Reset Workspace') {
+        stage('Preparation') {
             steps {
                 deleteDir() 
                 checkout scm 
             }
         }
 
-        stage('Build & Deploy') {
+        stage('Build & Push') {
             steps {
                 script {
                     echo "Building and Pushing Images..."
@@ -34,14 +36,30 @@ pipeline {
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
                     }
-                    
-                    echo "Deploying to Production..."
-                    // This uses the Compose V2 plugin
-                    sh "API_URL=${API_URL} docker compose up -d --force-recreate"
-                    
-                    echo "Cleaning up local build images..."
-                    sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
                 }
+            }
+        }
+
+        stage('Deploy to Production') {
+            steps {
+                script {
+                    echo "Stopping old containers to avoid conflicts..."
+                    // 'down' removes containers, networks, and images defined in compose
+                    // The '|| true' ensures the pipeline continues if nothing was running
+                    sh "docker compose down --remove-orphans || true"
+                    
+                    echo "Deploying new version..."
+                    sh "API_URL=${API_URL} docker compose up -d --force-recreate"
+                }
+            }
+        }
+
+        stage('Post-Build Cleanup') {
+            steps {
+                echo "Cleaning up local build images to save disk space..."
+                sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
+                // Crucial for your Sonar server issues: clean dangling images
+                sh "docker image prune -f"
             }
         }
     }
