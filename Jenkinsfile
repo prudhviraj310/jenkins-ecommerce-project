@@ -3,8 +3,7 @@ pipeline {
     
     options {
         skipDefaultCheckout(true) 
-        timeout(time: 1, unit: 'HOURS') // Good practice to prevent hanging builds
-        ansiColor('xterm')
+        timeout(time: 1, unit: 'HOURS') 
     }
 
     environment {
@@ -44,8 +43,7 @@ pipeline {
             steps {
                 script {
                     echo "Stopping old containers to avoid conflicts..."
-                    // 'down' removes containers, networks, and images defined in compose
-                    // The '|| true' ensures the pipeline continues if nothing was running
+                    // This clears the 'mysql-db' conflict you had earlier
                     sh "docker compose down --remove-orphans || true"
                     
                     echo "Deploying new version..."
@@ -56,10 +54,12 @@ pipeline {
 
         stage('Post-Build Cleanup') {
             steps {
-                echo "Cleaning up local build images to save disk space..."
-                sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
-                // Crucial for your Sonar server issues: clean dangling images
-                sh "docker image prune -f"
+                script {
+                    echo "Cleaning up local build images..."
+                    sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
+                    // Keeps your disk space healthy
+                    sh "docker image prune -f"
+                }
             }
         }
     }
