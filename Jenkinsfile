@@ -16,10 +16,14 @@ pipeline {
     }
 
     stages {
-        stage('Preparation') {
+        stage('Cleanup & Prep') {
             steps {
-                deleteDir() 
-                checkout scm 
+                script {
+                    echo "Force clearing existing containers to prevent conflicts..."
+                    sh "docker rm -f ecommerce-backend ecommerce-frontend mysql-db || true"
+                    deleteDir() 
+                    checkout scm 
+                }
             }
         }
 
@@ -39,26 +43,23 @@ pipeline {
             }
         }
 
-        stage('Deploy to Production') {
+        stage('Deploy') {
             steps {
                 script {
-                    echo "Stopping old containers to avoid conflicts..."
-                    // This clears the 'mysql-db' conflict you had earlier
-                    sh "docker compose down --remove-orphans || true"
-                    
-                    echo "Deploying new version..."
+                    echo "Deploying with Compose..."
                     sh "API_URL=${API_URL} docker compose up -d --force-recreate"
                 }
             }
         }
 
-        stage('Post-Build Cleanup') {
+        stage('Space Cleanup') {
             steps {
                 script {
-                    echo "Cleaning up local build images..."
+                    echo "Removing old build images..."
+                    // This deletes the specific images just built to save space
                     sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
-                    // Keeps your disk space healthy
-                    sh "docker image prune -f"
+                    // This deletes ALL unused images (extremely helpful for your disk space)
+                    sh "docker image prune -af --filter 'until=24h'" 
                 }
             }
         }
