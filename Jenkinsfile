@@ -11,7 +11,7 @@ pipeline {
         BACKEND_IMAGE       = "prudhviraj310/ecommerce-backend"
         DOCKER_TAG          = "${BUILD_NUMBER}"
         DOCKER_HUB_CREDS_ID = 'docker-hub-creds'
-        API_URL             = "http://35.154.134.186:5000/api" 
+        API_URL             = "http://3.111.170.86:5000/api" 
         NOTIFY_EMAIL        = "prudhviraj7675@gmail.com" 
     }
 
