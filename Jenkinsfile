@@ -30,14 +30,22 @@ pipeline {
         stage('Build & Push') {
             steps {
                 script {
-                    echo "Building and Pushing Images..."
-                    sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
-                    sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -f Dockerfile.backend ."
+                    echo "Building Images with Build Number and Latest tags..."
+                    // Build Frontend with API_URL build-arg
+                    sh "docker build -t ${FRONTEND_IMAGE}:${DOCKER_TAG} -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
+                    // Build Backend
+                    sh "docker build -t ${BACKEND_IMAGE}:${DOCKER_TAG} -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                     
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_CREDS_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo '${PASS}' | docker login -u ${USER} --password-stdin"
+                        
+                        // Push Build Number tags
                         sh "docker push ${FRONTEND_IMAGE}:${DOCKER_TAG}"
                         sh "docker push ${BACKEND_IMAGE}:${DOCKER_TAG}"
+                        
+                        // Push Latest tags (This ensures docker-compose always gets the newest code)
+                        sh "docker push ${FRONTEND_IMAGE}:latest"
+                        sh "docker push ${BACKEND_IMAGE}:latest"
                     }
                 }
             }
@@ -47,6 +55,8 @@ pipeline {
             steps {
                 script {
                     echo "Deploying with Compose..."
+                    // Force pull to ensure the ':latest' image is updated from Docker Hub
+                    sh "docker compose pull"
                     sh "API_URL=${API_URL} docker compose up -d --force-recreate"
                 }
             }
@@ -55,11 +65,9 @@ pipeline {
         stage('Space Cleanup') {
             steps {
                 script {
-                    echo "Removing old build images..."
-                    // This deletes the specific images just built to save space
+                    echo "Removing local build images to save disk space..."
                     sh "docker rmi ${FRONTEND_IMAGE}:${DOCKER_TAG} ${BACKEND_IMAGE}:${DOCKER_TAG} || true"
-                    // This deletes ALL unused images (extremely helpful for your disk space)
-                    sh "docker image prune -af --filter 'until=24h'" 
+                    sh "docker image prune -f --filter 'until=24h'" 
                 }
             }
         }
