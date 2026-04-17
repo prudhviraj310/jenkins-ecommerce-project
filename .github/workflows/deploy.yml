@@ -30,9 +30,12 @@ jobs:
 
       - name: Build & Push Images
         run: |
-          # We use the :gh-latest tag to keep these separate from Jenkins images
+          # Use gh-latest tag to keep these separate from Jenkins images
           docker build -t prudhviraj310/ecommerce-backend:gh-latest -f Dockerfile.backend .
-          docker build --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5000 -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
+          
+          # Point the Frontend to the GitHub Backend port (5001)
+          docker build --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5001 -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
+          
           docker push prudhviraj310/ecommerce-backend:gh-latest
           docker push prudhviraj310/ecommerce-frontend:gh-latest
 
@@ -54,14 +57,19 @@ jobs:
             # 2. Stop and remove only the GitHub version if it was already running
             docker rm -f gh-frontend gh-backend gh-mysql || true
             
-            # 3. Start the GitHub version with UNIQUE names and ports
-            # We use port 3001 for frontend so it doesn't conflict with Jenkins on 3000
+            # 3. Pull fresh images to ensure we don't use old cached ones
+            docker pull prudhviraj310/ecommerce-backend:gh-latest
+            docker pull prudhviraj310/ecommerce-frontend:gh-latest
+            
+            # 4. Start the GitHub version with UNIQUE names and ports
             docker run -d --name gh-mysql -e MYSQL_ROOT_PASSWORD=root mysql:8.0 || true
             
+            # Backend: External 5001 -> Internal 5000
             docker run -d --name gh-backend \
               -p 5001:5000 \
               prudhviraj310/ecommerce-backend:gh-latest
             
+            # Frontend: External 3001 -> Internal 80 (Crucial for Nginx images)
             docker run -d --name gh-frontend \
-              -p 3001:3000 \
+              -p 3001:80 \
               prudhviraj310/ecommerce-frontend:gh-latest
