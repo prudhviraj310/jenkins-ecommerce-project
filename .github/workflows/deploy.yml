@@ -30,13 +30,13 @@ jobs:
 
       - name: Build & Push Images
         run: |
-          # 1. Build Backend
+          # Build Backend
           docker build -t prudhviraj310/ecommerce-backend:gh-latest -f Dockerfile.backend .
           
-          # 2. Build Frontend (Note: Added /api to URL and included Stripe Key)
+          # Build Frontend - CRITICAL: Use single quotes for the URL and Key
           docker build \
-            --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5001/api \
-            --build-arg REACT_APP_STRIPE_KEY=${{ secrets.STRIPE_PUBLISHABLE_KEY }} \
+            --build-arg REACT_APP_API_URL='http://${{ secrets.EC2_PUBLIC_IP }}:5001/api' \
+            --build-arg REACT_APP_STRIPE_KEY='${{ secrets.STRIPE_PUBLISHABLE_KEY }}' \
             -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
           
           docker push prudhviraj310/ecommerce-backend:gh-latest
@@ -56,19 +56,19 @@ jobs:
             mkdir -p ~/gh_actions_project
             cd ~/gh_actions_project
             
-            # 1. Clean up old GitHub containers
+            # 1. Kill old containers
             docker rm -f gh-frontend gh-backend gh-mysql || true
             
-            # 2. Start MySQL first with a dedicated database
+            # 2. Start Database
             docker run -d --name gh-mysql \
               -e MYSQL_ROOT_PASSWORD=root \
               -e MYSQL_DATABASE=ecommerce_db \
               mysql:8.0 || true
             
-            # 3. Wait for database initialization (prevents ECONNREFUSED)
+            # 3. Give MySQL time to start up (Prevents ECONNREFUSED)
             sleep 20
             
-            # 4. Start Backend (Linked to DB container)
+            # 4. Start Backend (Linked to gh-mysql)
             docker run -d --name gh-backend \
               -p 5001:5000 \
               --link gh-mysql:db-host \

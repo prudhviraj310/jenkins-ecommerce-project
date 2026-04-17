@@ -11,22 +11,30 @@ const App = () => {
   const [errorMessage, setErrorMessage] = useState('');
 
   // --- DYNAMIC API URL ---
-  // This picks up the IP from Docker during build. Defaults to localhost for local dev.
+  // If the variable from Docker is missing, it defaults to localhost.
   const API_BASE_URL = process.env.REACT_APP_API_URL || 'http://localhost:5000/api';
 
   const fetchProducts = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/products`);
+      // If the backend returns an error (500), this line might fail
       const data = await response.json();
-      const formatted = data.map((item) => ({
-        id: item.id.toString(),
-        name: item.name,
-        description: item.description,
-        price: { formatted_with_symbol: `₹${item.price}` },
-        image: { source: item.image_url, url: item.image_url }
-      }));
-      setProducts(formatted);
-    } catch (err) { console.error("Fetch Products Error:", err); }
+      
+      if (Array.isArray(data)) {
+        const formatted = data.map((item) => ({
+          id: item.id.toString(),
+          name: item.name,
+          description: item.description,
+          price: { formatted_with_symbol: `₹${item.price}` },
+          image: { source: item.image_url, url: item.image_url }
+        }));
+        setProducts(formatted);
+      } else {
+        console.error("Backend did not return an array:", data);
+      }
+    } catch (err) { 
+      console.error("Fetch Products Error:", err); 
+    }
   };
 
   const fetchCart = async () => {
@@ -34,22 +42,26 @@ const App = () => {
       const response = await fetch(`${API_BASE_URL}/cart`);
       const data = await response.json();
       
-      const formattedItems = data.map(item => ({
-        id: item.cart_id.toString(),
-        name: item.name,
-        quantity: item.quantity,
-        line_total: { formatted_with_symbol: `₹${item.price * item.quantity}` },
-        image: { url: item.image_url }
-      }));
+      if (Array.isArray(data)) {
+        const formattedItems = data.map(item => ({
+          id: item.cart_id.toString(),
+          name: item.name,
+          quantity: item.quantity,
+          line_total: { formatted_with_symbol: `₹${item.price * item.quantity}` },
+          image: { url: item.image_url }
+        }));
 
-      const totalValue = data.reduce((sum, item) => sum + (item.price * item.quantity), 0);
-      
-      setCart({
-        line_items: formattedItems,
-        total_items: data.length,
-        subtotal: { formatted_with_symbol: `₹${totalValue}` }
-      });
-    } catch (err) { console.error("Fetch Cart Error:", err); }
+        const totalValue = data.reduce((sum, item) => sum + (item.price * item.quantity), 0);
+        
+        setCart({
+          line_items: formattedItems,
+          total_items: data.length,
+          subtotal: { formatted_with_symbol: `₹${totalValue}` }
+        });
+      }
+    } catch (err) { 
+      console.error("Fetch Cart Error:", err); 
+    }
   };
 
   const handleAddToCart = async (productId, quantity) => {
@@ -60,10 +72,15 @@ const App = () => {
         body: JSON.stringify({ productId, quantity: 1 })
       });
       fetchCart(); 
-    } catch (err) { console.error("Add to Cart Error:", err); }
+    } catch (err) { 
+      console.error("Add to Cart Error:", err); 
+    }
   };
 
   useEffect(() => {
+    // DEBUG: This will show you exactly what URL your frontend is using!
+    console.log("DEBUG: Connecting to Backend at:", API_BASE_URL);
+    
     fetchProducts();
     fetchCart();
   }, []);
