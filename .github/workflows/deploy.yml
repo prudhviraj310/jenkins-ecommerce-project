@@ -18,7 +18,7 @@ jobs:
           SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
 
   build-and-push:
-    needs: sonar-scan # Build ONLY starts if Sonar passes
+    needs: sonar-scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -30,10 +30,10 @@ jobs:
 
       - name: Build & Push Images
         run: |
-          docker build -t prudhviraj310/ecommerce-backend:latest -f Dockerfile.backend .
-          docker build --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5000 -t prudhviraj310/ecommerce-frontend:latest -f Dockerfile.frontend .
-          docker push prudhviraj310/ecommerce-backend:latest
-          docker push prudhviraj310/ecommerce-frontend:latest
+          docker build -t prudhviraj310/ecommerce-backend:gh-latest -f Dockerfile.backend .
+          docker build --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5000 -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
+          docker push prudhviraj310/ecommerce-backend:gh-latest
+          docker push prudhviraj310/ecommerce-frontend:gh-latest
 
   deploy:
     needs: build-and-push
@@ -46,7 +46,22 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            cd ~/project_e_commerce || mkdir ~/project_e_commerce
-            # Pull the fresh images and restart using your compose file
-            docker compose pull
-            docker compose up -d --force-recreate
+            # 1. Create a specific directory for GitHub Actions version
+            mkdir -p ~/gh_actions_project
+            cd ~/gh_actions_project
+            
+            # 2. Remove ONLY the GitHub Actions version if it exists
+            # We use unique names: gh-frontend, gh-backend, gh-mysql
+            docker rm -f gh-frontend gh-backend gh-mysql || true
+            
+            # 3. Start the containers with unique names and tags
+            # We use --name to ensure they don't collide with Jenkins containers
+            docker run -d --name gh-mysql -e MYSQL_ROOT_PASSWORD=root mysql:8.0 || true
+            
+            docker run -d --name gh-backend \
+              -p 5001:5000 \
+              prudhviraj310/ecommerce-backend:gh-latest
+            
+            docker run -d --name gh-frontend \
+              -p 3001:3000 \
+              prudhviraj310/ecommerce-frontend:gh-latest
