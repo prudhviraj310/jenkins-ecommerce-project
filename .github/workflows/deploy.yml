@@ -30,6 +30,7 @@ jobs:
 
       - name: Build & Push Images
         run: |
+          # We use the :gh-latest tag to keep these separate from Jenkins images
           docker build -t prudhviraj310/ecommerce-backend:gh-latest -f Dockerfile.backend .
           docker build --build-arg REACT_APP_API_URL=http://${{ secrets.EC2_PUBLIC_IP }}:5000 -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
           docker push prudhviraj310/ecommerce-backend:gh-latest
@@ -46,16 +47,15 @@ jobs:
           username: ubuntu
           key: ${{ secrets.EC2_SSH_KEY }}
           script: |
-            # 1. Create a specific directory for GitHub Actions version
+            # 1. Create a separate directory for GitHub Actions files
             mkdir -p ~/gh_actions_project
             cd ~/gh_actions_project
             
-            # 2. Remove ONLY the GitHub Actions version if it exists
-            # We use unique names: gh-frontend, gh-backend, gh-mysql
+            # 2. Stop and remove only the GitHub version if it was already running
             docker rm -f gh-frontend gh-backend gh-mysql || true
             
-            # 3. Start the containers with unique names and tags
-            # We use --name to ensure they don't collide with Jenkins containers
+            # 3. Start the GitHub version with UNIQUE names and ports
+            # We use port 3001 for frontend so it doesn't conflict with Jenkins on 3000
             docker run -d --name gh-mysql -e MYSQL_ROOT_PASSWORD=root mysql:8.0 || true
             
             docker run -d --name gh-backend \
