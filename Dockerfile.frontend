@@ -1,15 +1,15 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# Accept both API URL and Stripe Key from build-args
+# Accept Build Arguments
 ARG REACT_APP_API_URL
 ARG REACT_APP_STRIPE_KEY
 
-# Convert ARGs to ENV so the React build process sees them
+# Map ARGs to ENVs for the React Build process
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
 ENV REACT_APP_STRIPE_KEY=$REACT_APP_STRIPE_KEY
 
-# Fix for legacy Webpack on Node 18
+# Support legacy SSL (needed for many Material UI / Node 18 builds)
 ENV NODE_OPTIONS=--openssl-legacy-provider
 
 COPY frontend/package*.json ./
