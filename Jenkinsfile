@@ -11,7 +11,7 @@ pipeline {
         FRONTEND_IMAGE = "prudhviraj310/ecommerce-frontend"
         BACKEND_IMAGE  = "prudhviraj310/ecommerce-backend"
         DOCKER_HUB_ID  = 'docker-hub-creds'
-        // Updated to your current EC2 IP to fix image/cart issues
+        // Your current EC2 Public IP
         API_URL        = "http://13.201.127.202:5000/api" 
     }
 
@@ -20,7 +20,7 @@ pipeline {
             steps {
                 script {
                     echo "Wiping workspace to fix Git Status 128 errors..."
-                    deleteDir() // This MUST be first to clear corrupted git metadata
+                    deleteDir() // Clears corrupted git metadata
                     
                     echo "Cleaning up old Docker containers..."
                     sh "docker rm -f ecommerce-backend ecommerce-frontend mysql-db || true"
@@ -54,9 +54,9 @@ pipeline {
             steps {
                 script {
                     echo "Deploying application via Docker Compose..."
-                    // We pull first to ensure we get the images we just pushed
-                    sh "docker compose pull"
-                    sh "API_URL=${API_URL} docker compose up -d --force-recreate"
+                    // Changed from 'docker compose' to 'docker-compose' for compatibility
+                    sh "docker-compose pull"
+                    sh "API_URL=${API_URL} docker-compose up -d --force-recreate"
                 }
             }
         }
