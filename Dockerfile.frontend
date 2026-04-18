@@ -1,24 +1,22 @@
 FROM node:18-alpine AS build
 WORKDIR /app
 
-# 1. Accept Build Arguments from GitHub Actions
+# Accept the Backend URL during build (Passed from Jenkins or GitHub)
 ARG REACT_APP_API_URL
-ARG REACT_APP_STRIPE_KEY
-
-# 2. Make them available to the React 'npm run build' process
 ENV REACT_APP_API_URL=$REACT_APP_API_URL
-ENV REACT_APP_STRIPE_KEY=$REACT_APP_STRIPE_KEY
 
-# Fix for legacy SSL issues with Webpack/Node 18
+# Fix for OpenSSL issues in newer Node versions
 ENV NODE_OPTIONS=--openssl-legacy-provider
 
-# 3. Build the application
+# Install dependencies and build
 COPY frontend/package*.json ./
 RUN npm install
 COPY frontend/ . 
+
+# The 'npm run build' command uses the REACT_APP_API_URL above
 RUN npm run build
 
-# 4. Serve with Nginx
+# Serve the static files using Nginx
 FROM nginx:alpine
 COPY --from=build /app/build /usr/share/nginx/html
 EXPOSE 80

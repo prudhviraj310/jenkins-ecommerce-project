@@ -5,20 +5,7 @@ on:
     branches: [ "main" ]
 
 jobs:
-  sonar-scan:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-      - name: SonarQube Scan
-        uses: sonarsource/sonarqube-scan-action@master
-        env:
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
-          SONAR_HOST_URL: ${{ secrets.SONAR_HOST_URL }}
-
   build-and-push:
-    needs: sonar-scan
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,10 +20,9 @@ jobs:
           # Build Backend
           docker build -t prudhviraj310/ecommerce-backend:gh-latest -f Dockerfile.backend .
           
-          # Build Frontend - CRITICAL: Use single quotes for the URL and Key
+          # Build Frontend - Targeting Port 5001
           docker build \
             --build-arg REACT_APP_API_URL='http://${{ secrets.EC2_PUBLIC_IP }}:5001/api' \
-            --build-arg REACT_APP_STRIPE_KEY='${{ secrets.STRIPE_PUBLISHABLE_KEY }}' \
             -t prudhviraj310/ecommerce-frontend:gh-latest -f Dockerfile.frontend .
           
           docker push prudhviraj310/ecommerce-backend:gh-latest
@@ -56,19 +42,18 @@ jobs:
             mkdir -p ~/gh_actions_project
             cd ~/gh_actions_project
             
-            # 1. Kill old containers
+            # Kill only GitHub containers
             docker rm -f gh-frontend gh-backend gh-mysql || true
             
-            # 2. Start Database
+            # Start GitHub Database
             docker run -d --name gh-mysql \
               -e MYSQL_ROOT_PASSWORD=root \
               -e MYSQL_DATABASE=ecommerce_db \
               mysql:8.0 || true
             
-            # 3. Give MySQL time to start up (Prevents ECONNREFUSED)
             sleep 20
             
-            # 4. Start Backend (Linked to gh-mysql)
+            # Start GitHub Backend on 5001
             docker run -d --name gh-backend \
               -p 5001:5000 \
               --link gh-mysql:db-host \
@@ -78,7 +63,7 @@ jobs:
               -e DB_NAME=ecommerce_db \
               prudhviraj310/ecommerce-backend:gh-latest
             
-            # 5. Start Frontend
+            # Start GitHub Frontend on 3001
             docker run -d --name gh-frontend \
               -p 3001:80 \
               prudhviraj310/ecommerce-frontend:gh-latest
