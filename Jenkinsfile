@@ -3,38 +3,71 @@ pipeline {
     
     options {
         timeout(time: 1, unit: 'HOURS')
-        skipDefaultCheckout(true) 
+        buildDiscarder(logRotator(numToKeepStr: '5'))
     }
 
     environment {
+        // Docker Hub details
         FRONTEND_IMAGE = "prudhviraj310/ecommerce-frontend"
         BACKEND_IMAGE  = "prudhviraj310/ecommerce-backend"
         DOCKER_HUB_ID  = 'docker-hub-creds'
-        // UPDATED: Now using your current Public IP
-        API_URL        = "http://13.235.16.18:5000/api" 
+        
+        // Networking & IPs
+        // Jenkins Server: 13.232.223.27
+        API_URL        = "http://13.232.223.27:5000/api" 
+        
+        // SonarQube Details
+        SONAR_SERVER_ID = 'sonar-server' 
+        SONAR_URL       = "http://3.109.144.110:9000"
+        
+        // Database Credentials ID
+        DB_PASS_ID      = 'MYSQL_DB_PASS'
     }
 
     stages {
         stage('Cleanup & Workspace Prep') {
             steps {
                 script {
-                    echo "Cleaning workspace and removing old containers..."
                     deleteDir() 
-                    // Stop old containers to prevent port conflicts on the new IP
                     sh "docker rm -f ecommerce-backend ecommerce-frontend mysql-db || true"
                     checkout scm
                 }
             }
         }
 
+        stage('SonarQube Analysis') {
+            steps {
+                script {
+                    def scannerHome = tool 'sonar-scanner' 
+                    withSonarQubeEnv("${SONAR_SERVER_ID}") {
+                        sh "${scannerHome}/bin/sonar-scanner \
+                        -Dsonar.projectKey=ecommerce-migration \
+                        -Dsonar.sources=. \
+                        -Dsonar.host.url=${SONAR_URL}"
+                    }
+                }
+            }
+        }
+
+        stage('Security Scan (Trivy FS)') {
+            steps {
+                echo "Scanning File System for vulnerabilities..."
+                sh "trivy fs --severity HIGH,CRITICAL ."
+            }
+        }
+
         stage('Build & Push') {
             steps {
                 script {
-                    echo "Building and Pushing Images for IP: ${API_URL}"
-                    // This build-arg is CRITICAL. It tells the React app where to find the API
+                    // Frontend build with the build-arg for React
                     sh "docker build -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
+                    
+                    // Backend build
                     sh "docker build -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                     
+                    // Security scan for images
+                    sh "trivy image --severity HIGH,CRITICAL ${FRONTEND_IMAGE}:latest"
+
                     withCredentials([usernamePassword(credentialsId: "${DOCKER_HUB_ID}", passwordVariable: 'PASS', usernameVariable: 'USER')]) {
                         sh "echo '${PASS}' | docker login -u ${USER} --password-stdin"
                         sh "docker push ${FRONTEND_IMAGE}:latest"
@@ -44,22 +77,26 @@ pipeline {
             }
         }
 
-        stage('Deploy') {
+        stage('Deploy Stack') {
             steps {
                 script {
-                    echo "Installing Standalone Docker Compose & Deploying..."
-                    
-                    // Downloads the binary into the workspace to avoid 'not found' errors
+                    // Ensure Docker Compose is available
                     sh """
-                        curl -L "https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64" -o ./docker-compose
-                        chmod +x ./docker-compose
+                        if ! command -v docker-compose &> /dev/null; then
+                            curl -L "https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64" -o ./docker-compose
+                            chmod +x ./docker-compose
+                        else
+                            cp \$(which docker-compose) ./docker-compose
+                        fi
                     """
                     
-                    echo "Pulling fresh images..."
-                    sh "./docker-compose pull"
-                    
-                    echo "Launching Application Stack at http://13.235.16.18:3000"
-                    sh "API_URL=${API_URL} ./docker-compose up -d --force-recreate"
+                    // Handle MySQL credentials (Username with Password)
+                    withCredentials([usernamePassword(credentialsId: "${DB_PASS_ID}", 
+                                     passwordVariable: 'SQL_PW', 
+                                     usernameVariable: 'SQL_USER')]) {
+                        
+                        sh "MYSQL_ROOT_PASSWORD=${SQL_PW} API_URL=${API_URL} ./docker-compose up -d --force-recreate"
+                    }
                 }
             }
         }
@@ -67,17 +104,7 @@ pipeline {
 
     post {
         success {
-            echo "-----------------------------------------------------------"
-            echo "SUCCESS! Your E-commerce app is live."
-            echo "Frontend: http://13.235.16.18:3000"
-            echo "Backend API: http://13.235.16.18:5000"
-            echo "-----------------------------------------------------------"
-        }
-        failure {
-            echo "-----------------------------------------------------------"
-            echo "DEPLOYMENT FAILED."
-            echo "Ensure your AWS Security Groups allow ports 3000 and 5000."
-            echo "-----------------------------------------------------------"
+            echo "SUCCESS: App live at http://13.232.223.27:3000"
         }
     }
 }
