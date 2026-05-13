@@ -10,7 +10,7 @@ pipeline {
         FRONTEND_IMAGE = "prudhviraj310/ecommerce-frontend"
         BACKEND_IMAGE  = "prudhviraj310/ecommerce-backend"
         DOCKER_HUB_ID  = 'docker-hub-creds'
-        // Your Verified EC2 Public IP
+        // Ensure this IP is your current AWS Public IP
         API_URL        = "http://13.201.127.202:5000/api" 
     }
 
@@ -20,6 +20,7 @@ pipeline {
                 script {
                     echo "Cleaning workspace and old containers..."
                     deleteDir() 
+                    // Use || true so the pipeline doesn't fail if containers don't exist yet
                     sh "docker rm -f ecommerce-backend ecommerce-frontend mysql-db || true"
                     checkout scm
                 }
@@ -30,6 +31,7 @@ pipeline {
             steps {
                 script {
                     echo "Building and Pushing Images..."
+                    // Injects the API_URL into the React frontend during the build
                     sh "docker build -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     sh "docker build -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                     
@@ -46,8 +48,10 @@ pipeline {
             steps {
                 script {
                     echo "Deploying via Docker Compose..."
-                    sh "docker-compose pull"
-                    sh "API_URL=${API_URL} docker-compose up -d --force-recreate"
+                    // Using the absolute path verified on your host (/usr/bin/docker-compose)
+                    sh "/usr/bin/docker-compose pull"
+                    // Force recreate ensures the new images are used immediately
+                    sh "API_URL=${API_URL} /usr/bin/docker-compose up -d --force-recreate"
                 }
             }
         }
