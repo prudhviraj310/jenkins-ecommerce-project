@@ -8,20 +8,27 @@ app.use(cors());
 app.use(express.json());
 
 // Senior Tip: Use Environment Variables for DB connection
-const db = mysql.createConnection({
-    host: process.env.DB_HOST || 'localhost', 
+// --- REPLACE THE OLD DB SECTION WITH THIS ---
+const db = mysql.createPool({
+    host: process.env.DB_HOST || 'db', // 'db' should match your service name in docker-compose
     user: process.env.DB_USER || 'root',
-    password: process.env.DB_PASSWORD || 'Prudhviraj@310', 
-    database: process.env.DB_NAME || 'ecommerce_db'
+    password: process.env.DB_PASSWORD || 'Prudhviraj@310',
+    database: process.env.DB_NAME || 'ecommerce_db',
+    waitForConnections: true,
+    connectionLimit: 10,
+    queueLimit: 0
 });
 
-db.connect((err) => {
+// Since it's now a Pool, the connection check looks slightly different:
+db.getConnection((err, connection) => {
     if (err) {
         console.error('CRITICAL: Database connection failed: ' + err.message);
     } else {
-        console.log('✅ Connected to MySQL Database.');
+        console.log('✅ Connected to MySQL Database via Pool.');
+        connection.release(); // Release the connection back to the pool
     }
 });
+// --------------------------------------------
 
 // Health Check Route (Fixes "Cannot GET /")
 app.get('/', (req, res) => {
