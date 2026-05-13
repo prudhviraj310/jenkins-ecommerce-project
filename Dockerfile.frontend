@@ -10,7 +10,7 @@ ENV NODE_OPTIONS=--openssl-legacy-provider
 
 # Install dependencies and build
 COPY frontend/package*.json ./
-RUN npm install
+RUN npm install --legacy-peer-deps
 COPY frontend/ . 
 
 # The 'npm run build' command uses the REACT_APP_API_URL above
