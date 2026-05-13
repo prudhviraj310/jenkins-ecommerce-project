@@ -10,30 +10,17 @@ pipeline {
         FRONTEND_IMAGE = "prudhviraj310/ecommerce-frontend"
         BACKEND_IMAGE  = "prudhviraj310/ecommerce-backend"
         DOCKER_HUB_ID  = 'docker-hub-creds'
+        // CRITICAL: Verify this is your current EC2 Public IP
         API_URL        = "http://13.201.127.202:5000/api" 
     }
 
     stages {
-        stage('Environment Fix') {
-            steps {
-                script {
-                    echo "Checking for Docker Compose..."
-                    def status = sh(script: "docker-compose --version", returnStatus: true)
-                    if (status != 0) {
-                        echo "Docker Compose not found. Installing locally in container..."
-                        sh "curl -L 'https://github.com/docker/compose/releases/download/v2.20.2/docker-compose-linux-x86_64' -o /tmp/docker-compose"
-                        sh "chmod +x /tmp/docker-compose"
-                        sh "mv /tmp/docker-compose /usr/bin/docker-compose || mkdir -p ~/bin && cp /tmp/docker-compose ~/bin/docker-compose"
-                    }
-                }
-            }
-        }
-
         stage('Cleanup & Workspace Prep') {
             steps {
                 script {
-                    echo "Cleaning workspace and old containers..."
+                    echo "Cleaning workspace and removing old containers..."
                     deleteDir() 
+                    // Stop old containers to free up ports 3000, 5000, and 3306
                     sh "docker rm -f ecommerce-backend ecommerce-frontend mysql-db || true"
                     checkout scm
                 }
@@ -43,7 +30,8 @@ pipeline {
         stage('Build & Push') {
             steps {
                 script {
-                    echo "Building and Pushing Images..."
+                    echo "Building and Pushing Images to Docker Hub..."
+                    // Injects the API URL into the React build process
                     sh "docker build -t ${FRONTEND_IMAGE}:latest -f Dockerfile.frontend --build-arg REACT_APP_API_URL=${API_URL} ."
                     sh "docker build -t ${BACKEND_IMAGE}:latest -f Dockerfile.backend ."
                     
@@ -59,12 +47,19 @@ pipeline {
         stage('Deploy') {
             steps {
                 script {
-                    echo "Deploying via Docker Compose..."
-                    // Try the system path first, then the custom path
-                    def cmd = sh(script: "command -v docker-compose || echo '~/bin/docker-compose'", returnStdout: true).trim()
+                    echo "Installing Standalone Docker Compose & Deploying..."
                     
-                    sh "${cmd} pull"
-                    sh "API_URL=${API_URL} ${cmd} up -d --force-recreate"
+                    // This block downloads a static binary that works regardless of host settings
+                    sh """
+                        curl -L "https://github.com/docker/compose/releases/download/v2.26.1/docker-compose-linux-x86_64" -o ./docker-compose
+                        chmod +x ./docker-compose
+                    """
+                    
+                    echo "Pulling fresh images..."
+                    sh "./docker-compose pull"
+                    
+                    echo "Launching Application Stack..."
+                    sh "API_URL=${API_URL} ./docker-compose up -d --force-recreate"
                 }
             }
         }
@@ -73,12 +68,15 @@ pipeline {
     post {
         success {
             echo "-----------------------------------------------------------"
-            echo "SUCCESS! App is live: http://13.201.127.202:3000"
+            echo "SUCCESS! Your E-commerce app is live."
+            echo "Frontend: http://13.201.127.202:3000"
+            echo "Backend API: http://13.201.127.202:5000"
             echo "-----------------------------------------------------------"
         }
         failure {
             echo "-----------------------------------------------------------"
-            echo "DEPLOYMENT FAILED. Check Jenkins Console Output."
+            echo "DEPLOYMENT FAILED."
+            echo "Check console output above for the specific error."
             echo "-----------------------------------------------------------"
         }
     }
