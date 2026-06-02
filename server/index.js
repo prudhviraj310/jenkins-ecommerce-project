@@ -10,7 +10,7 @@ app.use(express.json());
 // Senior Tip: Use Environment Variables for DB connection
 // --- REPLACE THE OLD DB SECTION WITH THIS ---
 const db = mysql.createPool({
-    host: process.env.DB_HOST || 'db', // 'db' should match your service name in docker-compose
+    host: process.env.DB_HOST || '127.0.0.1', // 'db' should match your service name in docker-compose
     user: process.env.DB_USER || 'root',
     password: process.env.DB_PASSWORD || 'Prudhviraj@310',
     database: process.env.DB_NAME || 'ecommerce_db',
